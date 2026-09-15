@@ -1,0 +1,29 @@
+name: tick
+
+# 15分ごとに Medvance コーチLINE の自動送信を起動する。
+# 秘密情報は置かない。GitHub の OIDC トークンで、このリポからの呼び出しだと先方が確認する。
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call coach tick
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=medvance-coach-line" | jq -r .value)
+          curl -sS --fail-with-body -m 150 -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            https://medvance-coach-line.vercel.app/api/cron-tick
