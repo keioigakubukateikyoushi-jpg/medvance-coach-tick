@@ -1,10 +1,15 @@
 name: tick
 
-# 15分ごとに Medvance コーチLINE の自動送信を起動する。
+# 朝・昼・夕方の枠で Medvance コーチLINE の自動送信を起動する。
+# */15 は遅れやすいので、07:00 / 12:00 / 16:00 JST も明示する。
 # 秘密情報は置かない。GitHub の OIDC トークンで、このリポからの呼び出しだと先方が確認する。
 on:
   schedule:
     - cron: '*/15 * * * *'
+    - cron: '50 21 * * *'
+    - cron: '0 3 * * *'
+    - cron: '0 7 * * *'
+    - cron: '0 8 * * *'
   workflow_dispatch:
 
 permissions:
