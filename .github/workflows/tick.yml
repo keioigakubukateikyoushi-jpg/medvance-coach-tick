@@ -1,11 +1,11 @@
 name: tick
 
-# これが時計。10分おきに本体を叩く。
-# GitHub の schedule は数分〜20分ほど遅れることがあるが、送信の窓は各時刻から50分あるので届く。
-# 手動起動は、遅れているときに今すぐ送らせるため。
+# これが時計。1回の実行が10分おきに6回、約1時間ぶん本体を叩く。
+# 最後の1回だけ X-Tick-Last: 1 を付け、本体が次の実行を起動して鎖をつなぐ。
+# GitHub の schedule は動かないことがあるので、1時間おきの予備として置くだけ。
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -19,12 +19,18 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 70
     steps:
-      - name: Call coach tick
+      - name: Call coach tick every 10 minutes for an hour
         run: |
-          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=medvance-coach-line" | jq -r .value)
-          curl -sS --fail-with-body -m 30 -X POST \
-            -H "Authorization: Bearer $TOKEN" \
-            https://medvance-coach-line.vercel.app/api/cron-tick
+          for i in 0 1 2 3 4 5; do
+            LAST=0
+            [ "$i" = "5" ] && LAST=1
+            TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=medvance-coach-line" | jq -r .value)
+            curl -sS --fail-with-body -m 60 -X POST \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "X-Tick-Last: $LAST" \
+              https://medvance-coach-line.vercel.app/api/cron-tick || true
+            [ "$i" = "5" ] || sleep 600
+          done
