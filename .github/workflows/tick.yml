@@ -1,8 +1,11 @@
 name: tick
 
-# GitHub の schedule は何時間も遅れるので時計にしない。
-# 残すのは手動起動だけ（鎖が完全に止まったとき用）。
+# これが時計。10分おきに本体を叩く。
+# GitHub の schedule は数分〜20分ほど遅れることがあるが、送信の窓は各時刻から50分あるので届く。
+# 手動起動は、遅れているときに今すぐ送らせるため。
 on:
+  schedule:
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 permissions:
