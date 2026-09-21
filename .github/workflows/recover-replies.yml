@@ -1,0 +1,55 @@
+name: Recover unanswered replies
+on:
+  workflow_dispatch:
+    inputs:
+      page_ids:
+        description: 'Comma-separated Notion source page IDs (same student, explicitly reviewed)'
+        required: true
+        type: string
+      mode:
+        description: 'Prepare a draft or send the reviewed draft'
+        required: true
+        type: choice
+        options: [prepare, send]
+      expected_digest:
+        description: 'SHA256 from prepare; required for send'
+        required: false
+        type: string
+permissions:
+  id-token: write
+  contents: read
+concurrency:
+  group: coach-reply-recovery
+  cancel-in-progress: false
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Run authenticated recovery without exposing student content
+        env:
+          RECOVERY_PAGE_IDS: ${{ inputs.page_ids }}
+          RECOVERY_MODE: ${{ inputs.mode }}
+          RECOVERY_DIGEST: ${{ inputs.expected_digest }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request, urllib.error
+          req = urllib.request.Request(
+              os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'] + '&audience=medvance-coach-recovery',
+              headers={'Authorization': 'bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+          with urllib.request.urlopen(req, timeout=20) as r:
+              token = json.load(r)['value']
+          body = {'ids': [s.strip() for s in os.environ['RECOVERY_PAGE_IDS'].split(',') if s.strip()],
+                  'mode': os.environ['RECOVERY_MODE'], 'expectedDigest': os.environ['RECOVERY_DIGEST']}
+          req = urllib.request.Request('https://medvance-coach-line.vercel.app/api/recover-replies',
+              data=json.dumps(body).encode(), method='POST',
+              headers={'Authorization': 'Bearer '+token, 'Content-Type': 'application/json'})
+          try:
+              with urllib.request.urlopen(req, timeout=285) as r:
+                  result=json.load(r)
+          except urllib.error.HTTPError as e:
+              print('Recovery failed:',e.code,e.read().decode()[:300]);raise SystemExit(1)
+          print(json.dumps(result))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('Recovery result (no student content):\n```json\n'+json.dumps(result,indent=2)+'\n```\n')
+          PY
