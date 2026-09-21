@@ -1,0 +1,43 @@
+name: Watch unanswered LINE replies
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: 'Optional test message ID: 9 plus 18 digits; sends ONE labelled check to configured operator'
+        required: false
+        type: string
+      inspect:
+        description: 'Only inspect the test result (no send)'
+        type: boolean
+        default: false
+permissions:
+  id-token: write
+  contents: read
+concurrency:
+  group: coach-reply-watchdog
+  cancel-in-progress: false
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Check pending replies without logging student content
+        env:
+          PROBE_ID: ${{ inputs.probe }}
+          INSPECT: ${{ inputs.inspect }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          req = urllib.request.Request(os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'] + '&audience=medvance-reply-watchdog',
+              headers={'Authorization': 'bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+          with urllib.request.urlopen(req, timeout=20) as r: token = json.load(r)['value']
+          body = {'probe': os.environ.get('PROBE_ID',''), 'inspect': os.environ.get('INSPECT') == 'true'}
+          req = urllib.request.Request('https://medvance-coach-line.vercel.app/api/reply-watchdog',
+              data=json.dumps(body).encode(), method='POST',
+              headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+          with urllib.request.urlopen(req, timeout=285) as r: result = json.load(r)
+          print(json.dumps(result))
+          if result.get('attention'): raise SystemExit('Unanswered replies need operator attention. See private Notion records.')
+          PY
