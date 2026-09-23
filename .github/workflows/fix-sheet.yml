@@ -12,6 +12,10 @@ on:
         description: 実際に書き込む（false なら下見だけ）
         type: boolean
         default: false
+      peek:
+        description: 中身をそのまま見るタブ名（例 2026年9月）。入れると直さず見るだけ
+        required: false
+        default: ''
 
 permissions:
   id-token: write
@@ -21,14 +25,19 @@ jobs:
   fix:
     runs-on: ubuntu-latest
     steps:
-      - name: Repair the student timetable sheet
+      - name: Repair or inspect the student timetable sheet
         env:
           SHEET: ${{ inputs.sheet }}
           APPLY: ${{ inputs.apply }}
+          PEEK: ${{ inputs.peek }}
         run: |
           TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=medvance-fix-sheet" | jq -r .value)
-          BODY=$(jq -n --arg s "$SHEET" --argjson a "$APPLY" '{sheet:$s, apply:$a}')
+          if [ -n "$PEEK" ]; then
+            BODY=$(jq -n --arg s "$SHEET" --arg p "$PEEK" '{sheet:$s, peek:$p}')
+          else
+            BODY=$(jq -n --arg s "$SHEET" --argjson a "$APPLY" '{sheet:$s, apply:$a}')
+          fi
           curl -sS --fail-with-body -m 120 -X POST \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
